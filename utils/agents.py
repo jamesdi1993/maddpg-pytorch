@@ -94,9 +94,9 @@ class DDPGAgent(object):
         return param_dict
     def load_params(self, params):
         for k in range(self.K):
-            self.policy.load_state_dict(params['policy' + str(k)])
-            self.target_policy.load_state_dict(params['target_policy' + str(k)])
-            self.policy_optimizer.load_state_dict(params['policy_optimizer' + str(k)])
+            self.policy[k].load_state_dict(params['policy' + str(k)])
+            self.target_policy[k].load_state_dict(params['target_policy' + str(k)])
+            self.policy_optimizer[k].load_state_dict(params['policy_optimizer' + str(k)])
         self.critic.load_state_dict(params['critic'])
         self.target_critic.load_state_dict(params['target_critic'])
         self.critic_optimizer.load_state_dict(params['critic_optimizer'])

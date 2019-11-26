@@ -67,7 +67,7 @@ class MADDPG(object):
         for a in self.agents:
             a.reset_noise()
 
-    def step(self, observations, explore=False, k = 0):
+    def step(self, observations, explore=False, k = [0]):
         """
         Take a step forward in environment with all agents
         Inputs:
@@ -76,10 +76,10 @@ class MADDPG(object):
         Outputs:
             actions: List of actions for each agent
         """
-        return [a.step(obs, explore=explore, k = k) for a, obs in zip(self.agents,
+        return [a.step(obs, explore=explore, k = k[a_i]) for a_i, a, obs in zip(k, self.agents,
                                                                  observations)]
 
-    def update(self, sample, agent_i, parallel=False, logger=None, k = 0):
+    def update(self, sample, agent_i, parallel=False, logger=None, k = [0]):
         """
         Update parameters of agent model based on sample from replay buffer
         Inputs:
@@ -98,22 +98,22 @@ class MADDPG(object):
         curr_agent.critic_optimizer.zero_grad()
         if self.alg_types[agent_i] == 'MADDPG':
             if self.discrete_action: # one-hot encode action
-                all_trgt_acs = [onehot_from_logits(pi[k](nobs)) for pi, nobs in
-                                zip(self.target_policies, next_obs)]
+                all_trgt_acs = [onehot_from_logits(pi[k[a_i]](nobs)) for a_i, pi, nobs in
+                                zip(k, self.target_policies, next_obs)]
             else:
-                all_trgt_acs = [pi[k](nobs) for pi, nobs in zip(self.target_policies,
+                all_trgt_acs = [pi[k[a_i]](nobs) for a_i, pi, nobs in zip(k, self.target_policies,
                                                              next_obs)]
             trgt_vf_in = torch.cat((*next_obs, *all_trgt_acs), dim=1)
         else:  # DDPG
             if self.discrete_action:
                 trgt_vf_in = torch.cat((next_obs[agent_i],
                                         onehot_from_logits(
-                                            curr_agent.target_policy[k](
+                                            curr_agent.target_policy[k[agent_i]](
                                                 next_obs[agent_i]))),
                                        dim=1)
             else:
                 trgt_vf_in = torch.cat((next_obs[agent_i],
-                                        curr_agent.target_policy[k](next_obs[agent_i])),
+                                        curr_agent.target_policy[k[agent_i]](next_obs[agent_i])),
                                        dim=1)
         target_value = (rews[agent_i].view(-1, 1) + self.gamma *
                         curr_agent.target_critic(trgt_vf_in) *
@@ -131,7 +131,7 @@ class MADDPG(object):
         torch.nn.utils.clip_grad_norm(curr_agent.critic.parameters(), 0.5)
         curr_agent.critic_optimizer.step()
 
-        curr_agent.policy_optimizer[k].zero_grad()
+        curr_agent.policy_optimizer[k[agent_i]].zero_grad()
 
         if self.discrete_action:
             # Forward pass as if onehot (hard=True) but backprop through a differentiable
@@ -139,10 +139,10 @@ class MADDPG(object):
             # through discrete categorical samples, but I'm not sure if that is
             # correct since it removes the assumption of a deterministic policy for
             # DDPG. Regardless, discrete policies don't seem to learn properly without it.
-            curr_pol_out = curr_agent.policy[k](obs[agent_i])
+            curr_pol_out = curr_agent.policy[k[agent_i]](obs[agent_i])
             curr_pol_vf_in = gumbel_softmax(curr_pol_out, hard=True)
         else:
-            curr_pol_out = curr_agent.policy[k](obs[agent_i])
+            curr_pol_out = curr_agent.policy[k[agent_i]](obs[agent_i])
             curr_pol_vf_in = curr_pol_out
         if self.alg_types[agent_i] == 'MADDPG':
             all_pol_acs = []
@@ -150,9 +150,9 @@ class MADDPG(object):
                 if i == agent_i:
                     all_pol_acs.append(curr_pol_vf_in)
                 elif self.discrete_action:
-                    all_pol_acs.append(onehot_from_logits(pi[k](ob)))
+                    all_pol_acs.append(onehot_from_logits(pi[k[i]](ob)))
                 else:
-                    all_pol_acs.append(pi[k](ob))
+                    all_pol_acs.append(pi[k[i]](ob))
             vf_in = torch.cat((*obs, *all_pol_acs), dim=1)
         else:  # DDPG
             vf_in = torch.cat((obs[agent_i], curr_pol_vf_in),
@@ -161,9 +161,9 @@ class MADDPG(object):
         pol_loss += (curr_pol_out**2).mean() * 1e-3
         pol_loss.backward()
         if parallel:
-            average_gradients(curr_agent.policy[k])
-        torch.nn.utils.clip_grad_norm(curr_agent.policy[k].parameters(), 0.5)
-        curr_agent.policy_optimizer[k].step()
+            average_gradients(curr_agent.policy[k[agent_i]])
+        torch.nn.utils.clip_grad_norm(curr_agent.policy[k[agent_i]].parameters(), 0.5)
+        curr_agent.policy_optimizer[k[agent_i]].step()
         if logger is not None:
             logger.add_scalars('agent%i/losses' % agent_i,
                                {'vf_loss': vf_loss,

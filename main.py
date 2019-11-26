@@ -59,11 +59,14 @@ def run(config):
                                   hidden_dim=config.hidden_dim,
                                   K = config.n_ensemble)
     replay_buffer = []
-    for k in range(config.n_ensemble):
-        replay_buffer.append(ReplayBuffer(config.buffer_length, maddpg.nagents,
-                                 [obsp.shape[0] for obsp in env.observation_space],
-                                 [acsp.shape[0] if isinstance(acsp, Box) else acsp.n
-                                  for acsp in env.action_space]))
+    for a_i in range(maddpg.nagents):
+        buffer = []
+        for k in range(config.n_ensemble):
+            buffer.append(ReplayBuffer(config.buffer_length, maddpg.nagents,
+                                     [obsp.shape[0] for obsp in env.observation_space],
+                                     [acsp.shape[0] if isinstance(acsp, Box) else acsp.n
+                                      for acsp in env.action_space]))
+        replay_buffer.append(buffer)
     t = 0
     for ep_i in range(0, config.n_episodes, config.n_rollout_threads):
         print("Episodes %i-%i of %i" % (ep_i + 1,
@@ -77,7 +80,7 @@ def run(config):
         maddpg.scale_noise(config.final_noise_scale + (config.init_noise_scale - config.final_noise_scale) * explr_pct_remaining)
         maddpg.reset_noise()
         # Pick kth subpolicy to update in this episode.
-        k = np.random.choice(config.n_ensemble)
+        k = np.random.choice(config.n_ensemble, maddpg.nagents)
         #print(k)
         for et_i in range(config.episode_length):
             # rearrange observations to be per agent, and convert to torch Variable
@@ -91,26 +94,27 @@ def run(config):
             # rearrange actions to be per environment
             actions = [[ac[i] for ac in agent_actions] for i in range(config.n_rollout_threads)]
             next_obs, rewards, dones, infos = env.step(actions)
-            replay_buffer[k].push(obs, agent_actions, rewards, next_obs, dones)
+            for a_i in range(maddpg.nagents):
+                replay_buffer[a_i][k[a_i]].push(obs, agent_actions, rewards, next_obs, dones)
             obs = next_obs
             t += config.n_rollout_threads
-            if (len(replay_buffer[k]) >= config.batch_size and
-                (t % config.steps_per_update) < config.n_rollout_threads):
-                if USE_CUDA:
-                    maddpg.prep_training(device='gpu')
-                else:
-                    maddpg.prep_training(device='cpu')
-                for u_i in range(config.n_rollout_threads):
-                    for a_i in range(maddpg.nagents):
-                        sample = replay_buffer[k].sample(config.batch_size,
+            for a_i in range(maddpg.nagents):
+                if (len(replay_buffer[a_i][k[a_i]]) >= config.batch_size and
+                    (t % config.steps_per_update) < config.n_rollout_threads):
+                    if USE_CUDA:
+                        maddpg.prep_training(device='gpu')
+                    else:
+                        maddpg.prep_training(device='cpu')
+                    for u_i in range(config.n_rollout_threads):
+                        sample = replay_buffer[a_i][k[a_i]].sample(config.batch_size,
                                                       to_gpu=USE_CUDA)
                         maddpg.update(sample, a_i, logger=logger, k = k)
                     maddpg.update_all_targets()
                 maddpg.prep_rollouts(device='cpu')
-        ep_rews = replay_buffer[k].get_average_rewards(
-            config.episode_length * config.n_rollout_threads)
-        for a_i, a_ep_rew in enumerate(ep_rews):
-            logger.add_scalar('agent%i/mean_episode_rewards' % a_i, a_ep_rew, ep_i)
+        #ep_rews = replay_buffer[k].get_average_rewards(
+        #    config.episode_length * config.n_rollout_threads)
+        #for a_i, a_ep_rew in enumerate(ep_rews):
+        #    logger.add_scalar('agent%i/mean_episode_rewards' % a_i, a_ep_rew, ep_i)
 
         if ep_i % config.save_interval < config.n_rollout_threads:
             os.makedirs(run_dir / 'incremental', exist_ok=True)

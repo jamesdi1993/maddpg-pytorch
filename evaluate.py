@@ -36,7 +36,7 @@ def run(config):
             frames.append(env.render('rgb_array')[0])
         env.render('human')
         # Pick a random subpolicy to execute in this episode
-        k = np.random.choice(maddpg.agents[0].K)
+        k = np.random.choice(maddpg.agents[0].K, maddpg.nagents)
         for t_i in range(config.episode_length):
             calc_start = time.time()
             # rearrange observations to be per agent, and convert to torch Variable

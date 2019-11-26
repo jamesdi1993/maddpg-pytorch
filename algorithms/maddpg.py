@@ -131,7 +131,7 @@ class MADDPG(object):
         torch.nn.utils.clip_grad_norm(curr_agent.critic.parameters(), 0.5)
         curr_agent.critic_optimizer.step()
 
-        curr_agent.policy_optimizer.zero_grad()
+        curr_agent.policy_optimizer[k].zero_grad()
 
         if self.discrete_action:
             # Forward pass as if onehot (hard=True) but backprop through a differentiable

@@ -14,6 +14,8 @@ from algorithms.maddpg import MADDPG
 
 USE_CUDA = torch.cuda.is_available()# False  #
 
+print("USE_CUDA", USE_CUDA)
+
 def make_parallel_env(env_id, n_rollout_threads, seed, discrete_action):
     def get_env_fn(rank):
         def init_env():
@@ -153,7 +155,7 @@ if __name__ == '__main__':
                         choices=['MADDPG', 'DDPG'])
     parser.add_argument("--discrete_action",
                         action='store_true')
-    parser.add_argument("--n_ensemble", default=int(1), type=int)
+    parser.add_argument("--n_ensemble", default=int(3), type=int)
 
     config = parser.parse_args()
 

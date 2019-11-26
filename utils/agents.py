@@ -32,7 +32,7 @@ class DDPGAgent(object):
                                             hidden_dim=hidden_dim,
                                             constrain_out=True,
                                             discrete_action=discrete_action))
-            self.policy_optimizer.append(Adam(self.policy.parameters(), lr=lr))
+            self.policy_optimizer.append(Adam(self.policy[k].parameters(), lr=lr))
             hard_update(self.target_policy[k], self.policy[k])
 
         self.critic = MLPNetwork(num_in_critic, 1,

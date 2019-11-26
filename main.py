@@ -78,6 +78,7 @@ def run(config):
         maddpg.reset_noise()
         # Pick kth subpolicy to update in this episode.
         k = np.random.choice(config.n_ensemble)
+        #print(k)
         for et_i in range(config.episode_length):
             # rearrange observations to be per agent, and convert to torch Variable
             torch_obs = [Variable(torch.Tensor(np.vstack(obs[:, i])),

@@ -23,12 +23,10 @@ def evaluate_returns(config):
         incremental = checkpoints[i]
         run_config = copy.deepcopy(config)
         run_config.incremental = incremental
-        print("The config for evaluation is: %s" % run_config)
         total_return, agent_return, good_returns = run(run_config)
         return_eps[i] = total_return
         return_good_agents[i] = good_returns
         return_agents.append(agent_return)
-        print("The agents returns are: %s" % agent_return)
 
     # Evaluate the final model
     total_return, agent_return, good_returns = run(run_config)

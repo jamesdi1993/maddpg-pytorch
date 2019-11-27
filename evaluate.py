@@ -51,7 +51,6 @@ def run(config):
             actions = [ac.data.numpy().flatten() for ac in torch_actions]
             obs, rewards, dones, infos = env.step(actions)
 
-
             total_returns[ep_i] += config.gamma ** t_i * np.sum(rewards)
             agent_returns[ep_i, :] +=  config.gamma ** t_i * np.array(rewards)
             if config.save_gifs:
@@ -73,7 +72,6 @@ def run(config):
     for i in range(len(env.agents)):
         if not hasattr(env.agents[i], 'adversary') or not env.agents[i].adversary:
             good_indices.append(i)
-    print("The good agents are: %s" % good_indices)
     good_returns = np.sum(agent_returns[:, good_indices], axis=1)
     return np.mean(total_returns), np.mean(agent_returns, axis=0), np.mean(good_returns, axis=0) / len(good_indices)
 

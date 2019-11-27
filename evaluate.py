@@ -32,7 +32,6 @@ def run(config):
     agent_returns = np.zeros((config.n_episodes, maddpg.nagents))
     for ep_i in range(config.n_episodes):
         print("Episode %i of %i" % (ep_i + 1, config.n_episodes))
-        ri = 0
         obs = env.reset()
         if config.save_gifs:
             frames = []
@@ -69,7 +68,14 @@ def run(config):
             imageio.mimsave(str(gif_path / ('%i_%i.gif' % (gif_num, ep_i))),
                             frames, duration=ifi)
     env.close()
-    return np.mean(total_returns), np.mean(agent_returns, axis=0)
+
+    good_indices = []
+    for i in range(len(env.agents)):
+        if not hasattr(env.agents[i], 'adversary') or not env.agents[i].adversary:
+            good_indices.append(i)
+    print("The good agents are: %s" % good_indices)
+    good_returns = np.sum(agent_returns[:, good_indices], axis=1)
+    return np.mean(total_returns), np.mean(agent_returns, axis=0), np.mean(good_returns, axis=0) / len(good_indices)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()

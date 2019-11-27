@@ -1,5 +1,4 @@
 from evaluate import run
-from pathlib import Path
 import argparse
 import matplotlib.pyplot as plt
 import numpy as np
@@ -14,6 +13,8 @@ def evaluate_returns(config):
     """
     checkpoints = np.arange(1, config.trained_episodes, config.step)
     return_eps = np.zeros(checkpoints.shape[0] + 1) # checkpoints + final
+    return_good_agents = np.zeros(checkpoints.shape[0] + 1)
+    return_agents = []
 
     # Add flag for disabling gif
     config.save_gifs = False
@@ -23,21 +24,63 @@ def evaluate_returns(config):
         run_config = copy.deepcopy(config)
         run_config.incremental = incremental
         print("The config for evaluation is: %s" % run_config)
-        total_return, _ = run(run_config)
+        total_return, agent_return, good_returns = run(run_config)
         return_eps[i] = total_return
+        return_good_agents[i] = good_returns
+        return_agents.append(agent_return)
+        print("The agents returns are: %s" % agent_return)
 
-    total_return, _ = run(run_config)
-    return_eps[-1] = total_return # Evaluate the final model
-    plot_return(return_eps, np.append(checkpoints, checkpoints[-1] + config.step), config)
+    # Evaluate the final model
+    total_return, agent_return, good_returns = run(run_config)
+    return_eps[-1] = total_return
+    return_good_agents[-1] = good_returns
+    return_agents.append(agent_return)
 
-def plot_return(G, xs, config):
-    plt.plot(xs, G)
+    # Plot the returns
+    plot_agents_return(np.array(return_agents), np.append(checkpoints, checkpoints[-1] + config.step), config)
+    # plot_return(return_good_agents, np.append(checkpoints, checkpoints[-1] + config.step), config, "GoodAgents")
+
+def plot_agents_return(agents_return, xs, config):
+    """
+    Plot the returns of the agents
+    :param agents_return: The average returns of the agents
+    :param xs: The episodes
+    :param config: The config
+    :return: N/A
+    """
+    plots = []
+    for i in range(agents_return.shape[1]):
+        line = plt.plot(xs, agents_return[:, i], label='Agent %d' % i)
+        plots.append(line)
+    plt.legend()
+
+    plt.title('Agents return')
+
+    fig_dir = './plots/' + config.env_id + '/' + config.model_name
+    if not os.path.exists(fig_dir):
+        os.makedirs(fig_dir)
+    plt.savefig(fig_dir + '/agents_return.png')
+    plt.show()
+
+def plot_return(returns, xs, config, label):
+    """
+    Plot the returns;
+    :param returns: The returns for which to plot
+    :param xs: The episodes
+    :param config: configuration for evaluation
+    :return: N/A
+    """
+    plots = []
+    l1 = plt.plot(xs, returns, label=label)
+    plots.append(l1)
+    plt.legend()
+
     plt.title('Average return')
 
     fig_dir = './plots/' + config.env_id  + '/' + config.model_name
     if not os.path.exists(fig_dir):
         os.makedirs(fig_dir)
-    plt.savefig(fig_dir + '/returns.png')
+    plt.savefig(fig_dir + '/%s.png' % label)
     plt.show()
 
 if __name__ == '__main__':
@@ -52,6 +95,7 @@ if __name__ == '__main__':
     parser.add_argument("--gamma", default=1.0, type=float)
     parser.add_argument("--trained_episodes", default=25000, type=int)
     parser.add_argument("--step", default=1000, type=int)
+    parser.add_argument("--n_adversary", default=0, type=int)
 
     config = parser.parse_args()
 

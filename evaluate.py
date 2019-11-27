@@ -28,8 +28,11 @@ def run(config):
     maddpg.prep_rollouts(device='cpu')
     ifi = 1 / config.fps  # inter-frame interval
 
+    total_returns = np.zeros(config.n_episodes) # sum of all returns
+    agent_returns = np.zeros((config.n_episodes, maddpg.nagents))
     for ep_i in range(config.n_episodes):
         print("Episode %i of %i" % (ep_i + 1, config.n_episodes))
+        ri = 0
         obs = env.reset()
         if config.save_gifs:
             frames = []
@@ -48,6 +51,10 @@ def run(config):
             # convert actions to numpy arrays
             actions = [ac.data.numpy().flatten() for ac in torch_actions]
             obs, rewards, dones, infos = env.step(actions)
+
+
+            total_returns[ep_i] += config.gamma ** t_i * np.sum(rewards)
+            agent_returns[ep_i, :] +=  config.gamma ** t_i * np.array(rewards)
             if config.save_gifs:
                 frames.append(env.render('rgb_array')[0])
             calc_end = time.time()
@@ -61,9 +68,8 @@ def run(config):
                 gif_num += 1
             imageio.mimsave(str(gif_path / ('%i_%i.gif' % (gif_num, ep_i))),
                             frames, duration=ifi)
-
     env.close()
-
+    return np.mean(total_returns), np.mean(agent_returns, axis=0)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -79,6 +85,7 @@ if __name__ == '__main__':
     parser.add_argument("--n_episodes", default=10, type=int)
     parser.add_argument("--episode_length", default=25, type=int)
     parser.add_argument("--fps", default=30, type=int)
+    parser.add_argument("--gamma", default=1.0, type=float)
 
     config = parser.parse_args()
 

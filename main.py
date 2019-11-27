@@ -12,7 +12,7 @@ from utils.buffer import ReplayBuffer
 from utils.env_wrappers import SubprocVecEnv, DummyVecEnv
 from algorithms.maddpg import MADDPG
 
-USE_CUDA = torch.cuda.is_available()# False  #
+USE_CUDA = False #torch.cuda.is_available()# False  #
 
 print("USE_CUDA", USE_CUDA)
 

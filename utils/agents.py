@@ -5,6 +5,7 @@ from .networks import MLPNetwork
 from .misc import hard_update, gumbel_softmax, onehot_from_logits
 from .noise import OUNoise
 import numpy as np
+import operator
 
 class DDPGAgent(object):
     """
@@ -59,7 +60,7 @@ class DDPGAgent(object):
         else:
             self.exploration.scale = scale
 
-    def step(self, obs, explore=False, k = 0):
+    def step(self, obs, explore=False, k = 0, voted = False):
         """
         Take a step forward in environment for a minibatch of observations
         Inputs:
@@ -69,7 +70,23 @@ class DDPGAgent(object):
             action (PyTorch Variable): Actions for this agent
         """
         action = self.policy[k](obs)
+
         if self.discrete_action:
+            if voted:
+                ensemble_count = {}
+                ensemble_k = {}
+                for k in range(self.K):
+                    a = tuple(onehot_from_logits(self.policy[k](obs)).tolist()[0])
+                    if a not in ensemble_count:
+                        ensemble_count[a] = 1
+                    else:
+                        ensemble_count[a] += 1
+                    if a not in ensemble_k:
+                        ensemble_k[a] = k
+                a = max(ensemble_count.items(), key=operator.itemgetter(1))[0]
+                k = ensemble_k[a]
+                action = self.policy[k](obs)
+                #print(voted)
             if explore:
                 action = gumbel_softmax(action, hard=True)
             else:

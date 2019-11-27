@@ -67,7 +67,7 @@ class MADDPG(object):
         for a in self.agents:
             a.reset_noise()
 
-    def step(self, observations, explore=False, k = [0]):
+    def step(self, observations, explore=False, k = [0], voted = False):
         """
         Take a step forward in environment with all agents
         Inputs:
@@ -76,7 +76,7 @@ class MADDPG(object):
         Outputs:
             actions: List of actions for each agent
         """
-        return [a.step(obs, explore=explore, k = k[a_i]) for a_i, a, obs in zip(k, self.agents,
+        return [a.step(obs, explore=explore, k = k_i, voted=voted) for k_i, a, obs in zip(k, self.agents,
                                                                  observations)]
 
     def update(self, sample, agent_i, parallel=False, logger=None, k = [0]):
@@ -98,10 +98,10 @@ class MADDPG(object):
         curr_agent.critic_optimizer.zero_grad()
         if self.alg_types[agent_i] == 'MADDPG':
             if self.discrete_action: # one-hot encode action
-                all_trgt_acs = [onehot_from_logits(pi[k[a_i]](nobs)) for a_i, pi, nobs in
+                all_trgt_acs = [onehot_from_logits(pi[k_i](nobs)) for k_i, pi, nobs in
                                 zip(k, self.target_policies, next_obs)]
             else:
-                all_trgt_acs = [pi[k[a_i]](nobs) for a_i, pi, nobs in zip(k, self.target_policies,
+                all_trgt_acs = [pi[k_i](nobs) for k_i, pi, nobs in zip(k, self.target_policies,
                                                              next_obs)]
             trgt_vf_in = torch.cat((*next_obs, *all_trgt_acs), dim=1)
         else:  # DDPG

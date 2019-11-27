@@ -14,6 +14,7 @@ def evaluate_returns(config):
     checkpoints = np.arange(1, config.trained_episodes, config.step)
     return_eps = np.zeros(checkpoints.shape[0] + 1) # checkpoints + final
     return_good_agents = np.zeros(checkpoints.shape[0] + 1)
+    return_adversary_agents = np.zeros(checkpoints.shape[0] + 1)
     return_agents = []
 
     # Add flag for disabling gif
@@ -23,20 +24,22 @@ def evaluate_returns(config):
         incremental = checkpoints[i]
         run_config = copy.deepcopy(config)
         run_config.incremental = incremental
-        total_return, agent_return, good_returns = run(run_config)
+        total_return, agent_return, good_returns, adversary_returns = run(run_config)
         return_eps[i] = total_return
         return_good_agents[i] = good_returns
+        return_adversary_agents[i] = adversary_returns
         return_agents.append(agent_return)
 
     # Evaluate the final model
-    total_return, agent_return, good_returns = run(run_config)
+    total_return, agent_return, good_returns, adversary_returns = run(run_config)
     return_eps[-1] = total_return
     return_good_agents[-1] = good_returns
+    return_adversary_agents[-1] = adversary_returns
     return_agents.append(agent_return)
 
     # Plot the returns
-    plot_agents_return(np.array(return_agents), np.append(checkpoints, checkpoints[-1] + config.step), config)
-    # plot_return(return_good_agents, np.append(checkpoints, checkpoints[-1] + config.step), config, "GoodAgents")
+    # plot_agents_return(np.array(return_agents), np.append(checkpoints, checkpoints[-1] + config.step), config)
+    plot_return(return_adversary_agents, np.append(checkpoints, checkpoints[-1] + config.step), config, "Adversary")
 
 def plot_agents_return(agents_return, xs, config):
     """

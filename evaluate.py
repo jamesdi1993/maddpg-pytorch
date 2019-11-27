@@ -69,11 +69,16 @@ def run(config):
     env.close()
 
     good_indices = []
+    adversary_indices = []
     for i in range(len(env.agents)):
-        if not hasattr(env.agents[i], 'adversary') or not env.agents[i].adversary:
+        if hasattr(env.agents[i], 'adversary') and env.agents[i].adversary:
+            adversary_indices.append(i)
+        else:
             good_indices.append(i)
     good_returns = np.sum(agent_returns[:, good_indices], axis=1)
-    return np.mean(total_returns), np.mean(agent_returns, axis=0), np.mean(good_returns, axis=0) / len(good_indices)
+    adversary_returns = np.sum(agent_returns[:, adversary_indices], axis=1)
+    return np.mean(total_returns), np.mean(agent_returns, axis=0), \
+           np.mean(good_returns, axis=0) / len(good_indices), np.mean(adversary_returns, axis=0) / len(adversary_indices)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()

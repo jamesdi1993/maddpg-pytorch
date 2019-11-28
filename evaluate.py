@@ -9,7 +9,6 @@ from utils.make_env import make_env
 from algorithms.maddpg import MADDPG
 import numpy as np
 
-
 def run(config):
     model_path = (Path('./models') / config.env_id / config.model_name /
                   ('run%i' % config.run_num))

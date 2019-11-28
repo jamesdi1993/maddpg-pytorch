@@ -181,12 +181,13 @@ def plot_returns(returns, xs, config, labels):
     plt.savefig(fig_dir + '/%s.png' % file_name)
     plt.show()
 
+# Example usage: python plot_returns.py simple_tag --models [('maddpg_vs_ddpg',1),('maddpg_vs_maddpg',1)] --n_episodes 10
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("env_id", help="Name of environment")
     # Use space as delimiter to separate out the models
     parser.add_argument('--models', help="Models to compare with '(model_name, run_id), ...'" + \
-                                         "e.g '(Ensemble-Voted,1),(Ensemble-Random,2)'", type=str)
+                                         "e.g '('Ensemble-Voted',1),('Ensemble-Random',2)'", type=str)
     parser.add_argument("--n_episodes", default=10, type=int)
     parser.add_argument("--episode_length", default=25, type=int)
     parser.add_argument("--fps", default=30, type=int)

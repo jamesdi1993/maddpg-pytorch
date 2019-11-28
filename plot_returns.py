@@ -7,40 +7,70 @@ import numpy as np
 import copy
 import os
 
-def prepare_run_configs(config):
+def prepare_model_configs(config):
     """
-    Prepare a run config from plot configuration
+    Prepare configs from plot configuration
     :param config: a plot configuration
-    :return: a run configuration
+    :return: a list of list of run configuration, and the checkpoints;
     """
-    models = literal_eval(config)
+    models = literal_eval(config.models)
     model_configs = []
     checkpoints = np.arange(1, config.trained_episodes, config.step)
-    for (model_name, run_id) in models:
+    for model_name, run_num in models:
         run_configs = []
         for i in range(checkpoints.shape[0]):
             run_config = copy.deepcopy(config)
+            run_config.save_gifs = False
             incremental = checkpoints[i]
             run_config.model_name = model_name
-            run_config.run_id = run_id
+            run_config.run_num = run_num
             run_config.incremental = incremental
             run_configs.append(run_config)
+        # Add final model config
+        final_config = copy.deepcopy(config)
+        final_config.save_gifs = False
+        final_config.model_name = model_name
+        final_config.run_num = run_num
+        final_config.incremental = None
+        run_configs.append(final_config)
+        # Add the run_configs for the model
         model_configs.append(run_configs)
-    return model_configs
+    # Add final timestep into the config;
+    checkpoints = np.append(checkpoints, checkpoints[-1] + config.step)
+    return model_configs, checkpoints
 
-def evaluate_model_returns(model_configs, plot=True):
+def evaluate_model_returns(config):
+    """
+    Evaluate the return for one or a few models.
+    :param config: The configuration;
+    :return: N/A
+    """
     returns = []
-    for config in model_configs:
-        _, _, return_good_agents, return_adversary = evaluate_returns(config)
+    model_configs, checkpoints = prepare_model_configs(config)
+    for run_configs in model_configs:
+        print("Evaluating returns for model: %s" % run_configs[0].model_name)
+        _, _, return_good_agents, return_adversary = evaluate_run_returns(run_configs)
         returns.append(return_good_agents)
-    labels = [config.model_name for config in model_configs]
-    plot_returns(np.array(returns), config, labels)
+    labels = [run_configs[0].model_name for run_configs in model_configs]
+    plot_returns(np.array(returns), checkpoints, config, labels)
 
-def evaluate_returns(run_configs):
+def evaluate_run_returns(run_configs):
     """
     Evaluate the returns over a number of run_configs;
     :return:
     """
+    return_eps = np.zeros(len(run_configs))  # checkpoints + final
+    return_good_agents = np.zeros(len(run_configs))
+    return_adversary_agents = np.zeros(len(run_configs))
+    return_agents = []
+    for i in range(len(run_configs)):
+        run_config = run_configs[i]
+        total_return, agent_return, good_returns, adversary_returns = run(run_config)
+        return_eps[i] = total_return
+        return_good_agents[i] = good_returns
+        return_adversary_agents[i] = adversary_returns
+        return_agents.append(agent_return)
+    return return_eps, return_agents, return_good_agents, return_adversary_agents
 
 @deprecated
 def evaluate_returns(config):
@@ -138,7 +168,7 @@ def plot_returns(returns, xs, config, labels):
     """
     plots = []
     for i in range(returns.shape[0]):
-        line = plt.plot(xs, returns, label=labels[i])
+        line = plt.plot(xs, returns[i, :], label=labels[i])
         plots.append(line)
     plt.legend()
 
@@ -155,7 +185,8 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("env_id", help="Name of environment")
     # Use space as delimiter to separate out the models
-    parser.add_argument('--models', help="Models to compare with, e.g '(Ensemble-Voted,1),(Ensemble-Random,2)'", type=str)
+    parser.add_argument('--models', help="Models to compare with '(model_name, run_id), ...'" + \
+                                         "e.g '(Ensemble-Voted,1),(Ensemble-Random,2)'", type=str)
     parser.add_argument("--n_episodes", default=10, type=int)
     parser.add_argument("--episode_length", default=25, type=int)
     parser.add_argument("--fps", default=30, type=int)
@@ -166,4 +197,4 @@ if __name__ == '__main__':
 
     config = parser.parse_args()
 
-    evaluate_returns(config)
+    evaluate_model_returns(config)

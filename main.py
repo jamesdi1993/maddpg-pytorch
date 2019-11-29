@@ -81,6 +81,11 @@ def run(config):
         maddpg.reset_noise()
         # Pick kth subpolicy to update in this episode.
         k = np.random.choice(config.n_ensemble, maddpg.nagents)
+        for a in range(maddpg.nagents):
+            if env.agent_types[a] == "agent" and not config.agent_ens:
+                k[a] = 0
+            if env.agent_types[a] == "adversary" and not config.adversary_ens:
+                k[a] = 0
         #print(k)
         for et_i in range(config.episode_length):
             # rearrange observations to be per agent, and convert to torch Variable
@@ -161,6 +166,10 @@ if __name__ == '__main__':
     parser.add_argument("--discrete_action",
                         action='store_true')
     parser.add_argument("--n_ensemble", default=int(3), type=int)
+    parser.add_argument("--agent_ens",
+                        action='store_true')
+    parser.add_argument("--adversary_ens",
+                        action='store_true')
 
     config = parser.parse_args()
 

@@ -38,6 +38,11 @@ def run(config):
         env.render('human')
         # Pick a random subpolicy to execute in this episode
         k = np.random.choice(maddpg.agents[0].K, maddpg.nagents)
+        for a in range(maddpg.nagents):
+            if env.agent_types[a] == "agent" and not config.agent_ens:
+                k[a] = 0
+            if env.agent_types[a] == "adversary" and not config.adversary_ens:
+                k[a] = 0
         for t_i in range(config.episode_length):
             calc_start = time.time()
             # rearrange observations to be per agent, and convert to torch Variable

@@ -58,6 +58,10 @@ def run(config):
                                   lr=config.lr,
                                   hidden_dim=config.hidden_dim,
                                   K = config.n_ensemble)
+    shared_replay_buffer = ReplayBuffer(config.buffer_length, maddpg.nagents,
+                                     [obsp.shape[0] for obsp in env.observation_space],
+                                     [acsp.shape[0] if isinstance(acsp, Box) else acsp.n
+                                      for acsp in env.action_space])
     replay_buffer = []
     for a_i in range(maddpg.nagents):
         buffer = []
@@ -101,6 +105,7 @@ def run(config):
             next_obs, rewards, dones, infos = env.step(actions)
             for a_i in range(maddpg.nagents):
                 replay_buffer[a_i][k[a_i]].push(obs, agent_actions, rewards, next_obs, dones)
+            shared_replay_buffer.push(obs, agent_actions, rewards, next_obs, dones)
             obs = next_obs
             t += config.n_rollout_threads
             for a_i in range(maddpg.nagents):

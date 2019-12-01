@@ -2,6 +2,7 @@ from ast import literal_eval
 from deprecated import deprecated
 from evaluate import run
 import argparse
+from main import make_parallel_env
 import matplotlib.pyplot as plt
 import numpy as np
 import copy
@@ -16,21 +17,24 @@ def prepare_model_configs(config):
     models = literal_eval(config.models)
     model_configs = []
     checkpoints = np.arange(1, config.trained_episodes, config.step)
-    for model_name, run_num in models:
+    for model_name, run_num, agent_ens, adversary_ens, voted in models:
         run_configs = []
+        config_base = copy.deepcopy(config)
+        config_base.save_gifs = False
+        config_base.model_name = model_name
+        config_base.run_num = run_num
+        config_base.agent_ens = agent_ens
+        config_base.adversary_ens = adversary_ens
+        config_base.voted_execution = voted
+
         for i in range(checkpoints.shape[0]):
-            run_config = copy.deepcopy(config)
-            run_config.save_gifs = False
+            run_config = copy.deepcopy(config_base)
             incremental = checkpoints[i]
-            run_config.model_name = model_name
-            run_config.run_num = run_num
             run_config.incremental = incremental
             run_configs.append(run_config)
+
         # Add final model config
-        final_config = copy.deepcopy(config)
-        final_config.save_gifs = False
-        final_config.model_name = model_name
-        final_config.run_num = run_num
+        final_config = copy.deepcopy(config_base)
         final_config.incremental = None
         run_configs.append(final_config)
         # Add the run_configs for the model
@@ -181,7 +185,7 @@ def plot_returns(returns, xs, config, labels):
     plt.savefig(fig_dir + '/%s.png' % file_name)
     plt.show()
 
-# Example usage: python plot_returns.py simple_tag --models [('maddpg_vs_ddpg',1),('maddpg_vs_maddpg',1)] --n_episodes 10
+# Example usage: python plot_returns.py simple_tag --models "[('maddpg_vs_ddpg',1, False, False, False),('maddpg_vs_maddpg',1, True, False, True)]" --n_episodes 10
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("env_id", help="Name of environment")

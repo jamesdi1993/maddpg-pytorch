@@ -2,8 +2,6 @@ import argparse
 import torch
 import time
 import imageio
-from main import make_parallel_env
-import numpy as np
 from pathlib import Path
 from torch.autograd import Variable
 from utils.make_env import make_env
@@ -11,6 +9,7 @@ from algorithms.maddpg import MADDPG
 import numpy as np
 
 def run(config):
+    print("Evaluating returns for config: %s" % config)
     model_path = (Path('./models') / config.env_id / config.model_name /
                   ('run%i' % config.run_num))
     if config.incremental is not None:

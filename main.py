@@ -30,6 +30,7 @@ def make_parallel_env(env_id, n_rollout_threads, seed, discrete_action):
         return SubprocVecEnv([get_env_fn(i) for i in range(n_rollout_threads)])
 
 def run(config):
+    #print("Shared buffer", config.shared_buffer)
     model_dir = Path('./models') / config.env_id / config.model_name
     if not model_dir.exists():
         curr_run = 'run1'
@@ -116,9 +117,18 @@ def run(config):
                     else:
                         maddpg.prep_training(device='cpu')
                     for u_i in range(config.n_rollout_threads):
-                        sample = replay_buffer[a_i][k[a_i]].sample(config.batch_size,
+                        if config.shared_buffer:
+                            sample = shared_replay_buffer.sample(config.batch_size,
+                                                                       to_gpu=USE_CUDA)
+                        else:
+                            sample = replay_buffer[a_i][k[a_i]].sample(config.batch_size,
                                                       to_gpu=USE_CUDA)
-                        maddpg.update(sample, a_i, logger=logger, k = k)
+                        #print("Shared buffer", config.shared_buffer)
+                        if config.shared_buffer:
+                            #print("Shared buffer")
+                            maddpg.update_shared_voted(sample, a_i, logger=logger, k = k, voted=False)
+                        else:
+                            maddpg.update(sample, a_i, logger=logger, k = k)
                     maddpg.update_all_targets()
                 maddpg.prep_rollouts(device='cpu')
         #ep_rews = replay_buffer[k].get_average_rewards(
@@ -174,6 +184,8 @@ if __name__ == '__main__':
     parser.add_argument("--agent_ens",
                         action='store_true')
     parser.add_argument("--adversary_ens",
+                        action='store_true')
+    parser.add_argument("--shared_buffer",
                         action='store_true')
 
     config = parser.parse_args()

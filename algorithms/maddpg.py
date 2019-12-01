@@ -4,6 +4,7 @@ from gym.spaces import Box, Discrete
 from utils.networks import MLPNetwork
 from utils.misc import soft_update, average_gradients, onehot_from_logits, gumbel_softmax
 from utils.agents import DDPGAgent
+import operator
 
 MSELoss = torch.nn.MSELoss()
 
@@ -164,6 +165,148 @@ class MADDPG(object):
             average_gradients(curr_agent.policy[k[agent_i]])
         torch.nn.utils.clip_grad_norm(curr_agent.policy[k[agent_i]].parameters(), 0.5)
         curr_agent.policy_optimizer[k[agent_i]].step()
+        if logger is not None:
+            logger.add_scalars('agent%i/losses' % agent_i,
+                               {'vf_loss': vf_loss,
+                                'pol_loss': pol_loss},
+                               self.niter)
+
+    def vote(self, decisions, agent_i):
+        max_k = []
+        for k in range(self.agents[0].K):
+            #model_k = self.target_policies[agent_i][k]
+            # model_k.eval()
+            output_k = decisions[k][agent_i].tolist()  # onehot_from_logits(model_k(next_obs[i])).tolist()
+            for j in range(len(output_k)):
+                a = tuple(output_k[j])
+                ensemble_count = {}
+                ensemble_k = {}
+                if a not in ensemble_count:
+                    ensemble_count[a] = 1
+                else:
+                    ensemble_count[a] += 1
+                if a not in ensemble_k:
+                    ensemble_k[a] = k
+                a = max(ensemble_count.items(), key=operator.itemgetter(1))[0]
+                max_k.append(ensemble_k[a])
+        return max_k
+
+    def update_shared_voted(self, sample, agent_i, parallel=False, logger=None, k = [0], voted = False):
+        """
+        Update parameters of agent model based on sample from replay buffer
+        Inputs:
+            sample: tuple of (observations, actions, rewards, next
+                    observations, and episode end masks) sampled randomly from
+                    the replay buffer. Each is a list with entries
+                    corresponding to each agent
+            agent_i (int): index of agent to update
+            parallel (bool): If true, will average gradients across threads
+            logger (SummaryWriter from Tensorboard-Pytorch):
+                If passed in, important quantities will be logged
+        """
+        obs, acs, rews, next_obs, dones = sample
+        curr_agent = self.agents[agent_i]
+        #print("Using shared buffer")
+        curr_agent.critic_optimizer.zero_grad()
+        if self.alg_types[agent_i] == 'MADDPG':
+            if self.discrete_action: # one-hot encode action
+                if voted:
+                    all_trgt_acs_all_pol = [[onehot_from_logits(pi[k](nobs)) for pi, nobs in
+                                    zip(self.target_policies, next_obs)] for k in range(self.agents[0].K)]
+                    all_trgt_acs = []
+                    all_max_k = []
+                    for i in range(self.nagents):
+                        max_k = self.vote(all_trgt_acs_all_pol, i)
+                        all_max_k.append(max_k)
+                        all_trgt_acs.append(torch.stack([all_trgt_acs_all_pol[k_i][i][j] for k_i, j in
+                                        zip(max_k, range(len(next_obs[i])))]))
+                        #print(all_trgt_acs)
+                else:
+                    all_trgt_acs = [onehot_from_logits(pi[k_i](nobs)) for k_i, pi, nobs in
+                                zip(k,self.target_policies, next_obs)]
+            else:
+                all_trgt_acs = [pi[k_i](nobs) for k_i, pi, nobs in zip(k, self.target_policies,
+                                                             next_obs)]
+            trgt_vf_in = torch.cat((*next_obs, *all_trgt_acs), dim=1)
+        else:  # DDPG
+            if self.discrete_action:
+                trgt_vf_in = torch.cat((next_obs[agent_i],
+                                        onehot_from_logits(
+                                            curr_agent.target_policy[k[agent_i]](
+                                                next_obs[agent_i]))),
+                                       dim=1)
+            else:
+                trgt_vf_in = torch.cat((next_obs[agent_i],
+                                        curr_agent.target_policy[k[agent_i]](next_obs[agent_i])),
+                                       dim=1)
+        target_value = (rews[agent_i].view(-1, 1) + self.gamma *
+                        curr_agent.target_critic(trgt_vf_in) *
+                        (1 - dones[agent_i].view(-1, 1)))
+
+        if self.alg_types[agent_i] == 'MADDPG':
+            vf_in = torch.cat((*obs, *acs), dim=1)
+        else:  # DDPG
+            vf_in = torch.cat((obs[agent_i], acs[agent_i]), dim=1)
+        actual_value = curr_agent.critic(vf_in)
+        vf_loss = MSELoss(actual_value, target_value.detach())
+        vf_loss.backward()
+        if parallel:
+            average_gradients(curr_agent.critic)
+        torch.nn.utils.clip_grad_norm(curr_agent.critic.parameters(), 0.5)
+        curr_agent.critic_optimizer.step()
+
+        if voted and self.discrete_action:
+            for b in range(self.agents[0].K):
+                curr_agent.policy_optimizer[b].zero_grad()
+        else:
+            curr_agent.policy_optimizer[k[agent_i]].zero_grad()
+
+        if self.discrete_action:
+            # Forward pass as if onehot (hard=True) but backprop through a differentiable
+            # Gumbel-Softmax sample. The MADDPG paper uses the Gumbel-Softmax trick to backprop
+            # through discrete categorical samples, but I'm not sure if that is
+            # correct since it removes the assumption of a deterministic policy for
+            # DDPG. Regardless, discrete policies don't seem to learn properly without it.
+            if voted:
+                all_curr_pol_out = [curr_agent.policy[b](obs[agent_i]) for b in range(self.agents[0].K)]
+                curr_pol_out = torch.stack([all_curr_pol_out[all_max_k[agent_i][o]][o] for o in range(len(obs[agent_i]))])
+            else:
+                curr_pol_out = curr_agent.policy[k[agent_i]](obs[agent_i])
+            curr_pol_vf_in = gumbel_softmax(curr_pol_out, hard=True)
+        else:
+            curr_pol_out = curr_agent.policy[k[agent_i]](obs[agent_i])
+            curr_pol_vf_in = curr_pol_out
+        if self.alg_types[agent_i] == 'MADDPG':
+            all_pol_acs = []
+            for i, pi, ob in zip(range(self.nagents), self.policies, obs):
+                if i == agent_i:
+                    all_pol_acs.append(curr_pol_vf_in)
+                elif self.discrete_action:
+                    if voted:
+                        all_curr_pol_out = [curr_agent.policy[b](obs[i]) for b in range(self.agents[0].K)]
+                        all_pol_acs.append(onehot_from_logits(all_curr_pol_out[all_max_k[i]]))
+                    else:
+                        all_pol_acs.append(onehot_from_logits(pi[k[i]](ob)))
+                else:
+                    all_pol_acs.append(pi[k[i]](ob))
+            vf_in = torch.cat((*obs, *all_pol_acs), dim=1)
+        else:  # DDPG
+            vf_in = torch.cat((obs[agent_i], curr_pol_vf_in),
+                              dim=1)
+        pol_loss = -curr_agent.critic(vf_in).mean()
+        pol_loss += (curr_pol_out**2).mean() * 1e-3
+        pol_loss.backward()
+        if parallel:
+            if voted and self.discrete_action:
+                for b in range(self.agents[0].K):
+                    average_gradients(curr_agent.policy[b])
+                    torch.nn.utils.clip_grad_norm(curr_agent.policy[b].parameters(), 0.5)
+            else:
+                average_gradients(curr_agent.policy[k[agent_i]])
+                torch.nn.utils.clip_grad_norm(curr_agent.policy[k[agent_i]].parameters(), 0.5)
+        if voted and self.discrete_action:
+            for b in range(self.agents[0].K):
+                curr_agent.policy_optimizer[b].step()
         if logger is not None:
             logger.add_scalars('agent%i/losses' % agent_i,
                                {'vf_loss': vf_loss,

@@ -124,7 +124,7 @@ def run(config):
                             sample = replay_buffer[a_i][k[a_i]].sample(config.batch_size,
                                                       to_gpu=USE_CUDA)
                         #print("Shared buffer", config.shared_buffer)
-                        if config.shared_buffer:
+                        if config.shared_buffer and config.voted_ens:
                             #print("Shared buffer")
                             maddpg.update_shared_voted(sample, a_i, logger=logger, k = k, voted=False)
                         else:
@@ -186,6 +186,8 @@ if __name__ == '__main__':
     parser.add_argument("--adversary_ens",
                         action='store_true')
     parser.add_argument("--shared_buffer",
+                        action='store_true')
+    parser.add_argument("--voted_ens",
                         action='store_true')
 
     config = parser.parse_args()

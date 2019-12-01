@@ -106,7 +106,10 @@ if __name__ == '__main__':
     parser.add_argument("--fps", default=30, type=int)
     parser.add_argument("--gamma", default=1.0, type=float)
     parser.add_argument("--voted_execution", action='store_true')
-
+    parser.add_argument("--agent_ens",
+                        action='store_true')
+    parser.add_argument("--adversary_ens",
+                        action='store_true')
     config = parser.parse_args()
 
     run(config)

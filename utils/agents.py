@@ -60,7 +60,7 @@ class DDPGAgent(object):
         else:
             self.exploration.scale = scale
 
-    def step(self, obs, explore=False, k = 0, voted = False):
+    def step(self, obs, explore=False, k = 0, voted = True):
         """
         Take a step forward in environment for a minibatch of observations
         Inputs:

@@ -126,7 +126,7 @@ def run(config):
                         #print("Shared buffer", config.shared_buffer)
                         if config.shared_buffer and config.voted_ens:
                             #print("Shared buffer")
-                            maddpg.update_shared_voted(sample, a_i, logger=logger, k = k, voted=False)
+                            maddpg.update_shared_voted(sample, a_i, logger=logger, k = k, voted=True)
                         else:
                             maddpg.update(sample, a_i, logger=logger, k = k)
                     maddpg.update_all_targets()

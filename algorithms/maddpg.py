@@ -173,25 +173,26 @@ class MADDPG(object):
 
     def vote(self, decisions, agent_i):
         max_k = []
-        for k in range(self.agents[0].K):
+        for j in range(len(decisions[0][0])):
             #model_k = self.target_policies[agent_i][k]
             # model_k.eval()
-            output_k = decisions[k][agent_i].tolist()  # onehot_from_logits(model_k(next_obs[i])).tolist()
-            for j in range(len(output_k)):
-                a = tuple(output_k[j])
-                ensemble_count = {}
-                ensemble_k = {}
+            #output_k = decisions[:][agent_i][j].tolist()  # onehot_from_logits(model_k(next_obs[i])).tolist()
+            ensemble_count = {}
+            ensemble_k = {}
+            for k in range(self.agents[0].K):
+                output = decisions[k][agent_i][j][:].tolist()
+                a = tuple(output)
                 if a not in ensemble_count:
                     ensemble_count[a] = 1
                 else:
                     ensemble_count[a] += 1
                 if a not in ensemble_k:
                     ensemble_k[a] = k
-                a = max(ensemble_count.items(), key=operator.itemgetter(1))[0]
-                max_k.append(ensemble_k[a])
+            a = max(ensemble_count.items(), key=operator.itemgetter(1))[0]
+            max_k.append(ensemble_k[a])
         return max_k
 
-    def update_shared_voted(self, sample, agent_i, parallel=False, logger=None, k = [0], voted = False):
+    def update_shared_voted(self, sample, agent_i, parallel=False, logger=None, k = [0], voted = True):
         """
         Update parameters of agent model based on sample from replay buffer
         Inputs:
@@ -283,8 +284,9 @@ class MADDPG(object):
                     all_pol_acs.append(curr_pol_vf_in)
                 elif self.discrete_action:
                     if voted:
-                        all_curr_pol_out = [curr_agent.policy[b](obs[i]) for b in range(self.agents[0].K)]
-                        all_pol_acs.append(onehot_from_logits(all_curr_pol_out[all_max_k[i]]))
+                        all_curr_pol_out = [pi[b](obs[i]) for b in range(self.agents[0].K)]
+                        all_pol_acs.append(onehot_from_logits(torch.stack([all_curr_pol_out[all_max_k[i][o]][o] for o in range(len(ob))])))
+
                     else:
                         all_pol_acs.append(onehot_from_logits(pi[k[i]](ob)))
                 else:

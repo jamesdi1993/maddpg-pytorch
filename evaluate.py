@@ -2,7 +2,6 @@ import argparse
 import torch
 import time
 import imageio
-import numpy as np
 from pathlib import Path
 from torch.autograd import Variable
 from utils.make_env import make_env
@@ -10,6 +9,7 @@ from algorithms.maddpg import MADDPG
 import numpy as np
 
 def run(config):
+    print("Evaluating returns for config: %s" % config)
     model_path = (Path('./models') / config.env_id / config.model_name /
                   ('run%i' % config.run_num))
     if config.incremental is not None:
@@ -23,6 +23,8 @@ def run(config):
         gif_path.mkdir(exist_ok=True)
 
     maddpg = MADDPG.init_from_save(model_path)
+
+    # env = make_parallel_env(config.env_id, 1, config.seed, maddpg.discrete_action)
     env = make_env(config.env_id, discrete_action=maddpg.discrete_action)
     maddpg.prep_rollouts(device='cpu')
     ifi = 1 / config.fps  # inter-frame interval
@@ -39,9 +41,12 @@ def run(config):
         # Pick a random subpolicy to execute in this episode
         k = np.random.choice(maddpg.agents[0].K, maddpg.nagents)
         for a in range(maddpg.nagents):
-            if env.agent_types[a] == "agent" and not config.agent_ens:
+
+            # if good_agent and ensemble enabled;
+            if not (hasattr(env.agents[a], 'adversary') and env.agents[a].adversary) and not config.agent_ens:
                 k[a] = 0
-            if env.agent_types[a] == "adversary" and not config.adversary_ens:
+            # if adversary and ensemble enabled;
+            if hasattr(env.agents[a], 'adversary') and env.agents[a].adversary and not config.adversary_ens:
                 k[a] = 0
         for t_i in range(config.episode_length):
             calc_start = time.time()
@@ -50,7 +55,8 @@ def run(config):
                                   requires_grad=False)
                          for i in range(maddpg.nagents)]
             # get actions as torch Variables
-            torch_actions = maddpg.step(torch_obs, explore=False, k = k, voted=maddpg.discrete_action)
+            voted = maddpg.discrete_action and config.voted_execution
+            torch_actions = maddpg.step(torch_obs, explore=False, k = k, voted=voted)
             # convert actions to numpy arrays
             actions = [ac.data.numpy().flatten() for ac in torch_actions]
             obs, rewards, dones, infos = env.step(actions)
@@ -99,6 +105,7 @@ if __name__ == '__main__':
     parser.add_argument("--episode_length", default=25, type=int)
     parser.add_argument("--fps", default=30, type=int)
     parser.add_argument("--gamma", default=1.0, type=float)
+    parser.add_argument("--voted_execution", action='store_true')
 
     config = parser.parse_args()
 

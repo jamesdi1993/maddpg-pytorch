@@ -7,32 +7,60 @@ import numpy as np
 import copy
 import os
 
+def build_common_config(config, model_config):
+    """
+    Build a common run configuration for each model
+    :param config: A Plot Generation Config
+    :return: A common run config
+    """
+    model_name, run_num, agent_ens, adversary_ens, voted = model_config
+    config_base = copy.deepcopy(config)
+    config_base.save_gifs = False
+    config_base.model_name = model_name
+    config_base.run_num = run_num
+    config_base.agent_ens = agent_ens
+    config_base.adversary_ens = adversary_ens
+    config_base.voted_execution = voted
+    return config_base
+
+def build_label(config):
+    """
+    Build a label from config
+    :param config: A run config
+    :return: A string label, useful for saving plots.
+    """
+    label = config.model_name
+    if config.agent_ens:
+        label += '_agent_ens'
+    if config.adversary_ens:
+        label += '_adversary_ens'
+    if config.voted_execution:
+        label += '_voted'
+    return label
+
 def prepare_model_configs(config):
     """
     Prepare configs from plot configuration
     :param config: a plot configuration
-    :return: a list of list of run configuration, and the checkpoints;
+    :return: a list of list of run configuration and checkpoints;
     """
     models = literal_eval(config.models)
     model_configs = []
     checkpoints = np.arange(1, config.trained_episodes, config.step)
-    for model_name, run_num in models:
+    for model_config in models:
         run_configs = []
+        config_base = build_common_config(config, model_config)
         for i in range(checkpoints.shape[0]):
-            run_config = copy.deepcopy(config)
-            run_config.save_gifs = False
+            run_config = copy.deepcopy(config_base)
             incremental = checkpoints[i]
-            run_config.model_name = model_name
-            run_config.run_num = run_num
             run_config.incremental = incremental
             run_configs.append(run_config)
+
         # Add final model config
-        final_config = copy.deepcopy(config)
-        final_config.save_gifs = False
-        final_config.model_name = model_name
-        final_config.run_num = run_num
+        final_config = copy.deepcopy(config_base)
         final_config.incremental = None
         run_configs.append(final_config)
+
         # Add the run_configs for the model
         model_configs.append(run_configs)
     # Add final timestep into the config;
@@ -47,11 +75,13 @@ def evaluate_model_returns(config):
     """
     returns = []
     model_configs, checkpoints = prepare_model_configs(config)
+    labels = []
     for run_configs in model_configs:
         print("Evaluating returns for model: %s" % run_configs[0].model_name)
         _, _, return_good_agents, return_adversary = evaluate_run_returns(run_configs)
         returns.append(return_good_agents)
-    labels = [run_configs[0].model_name for run_configs in model_configs]
+        label = build_label(run_configs[0])
+        labels.append(label)
     plot_returns(np.array(returns), checkpoints, config, labels)
 
 def evaluate_run_returns(run_configs):
@@ -181,13 +211,13 @@ def plot_returns(returns, xs, config, labels):
     plt.savefig(fig_dir + '/%s.png' % file_name)
     plt.show()
 
-# Example usage: python plot_returns.py simple_tag --models [('maddpg_vs_ddpg',1),('maddpg_vs_maddpg',1)] --n_episodes 10
+# Example usage: python plot_returns.py simple_tag --models "[('maddpg_vs_ddpg',1, False, False, False),('maddpg_vs_maddpg',1, True, False, True)]" --n_episodes 10
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("env_id", help="Name of environment")
     # Use space as delimiter to separate out the models
-    parser.add_argument('--models', help="Models to compare with '(model_name, run_id), ...'" + \
-                                         "e.g '('Ensemble-Voted',1),('Ensemble-Random',2)'", type=str)
+    parser.add_argument('--models', help="Models to compare with '(model_name, run_id, agent_ens, adversary_ens, voted_evaluation), ...'" + \
+                                         "e.g '('Ensemble-Voted',1, True, False, True),('Ensemble-Random',2, True, False, False)'", type=str)
     parser.add_argument("--n_episodes", default=10, type=int)
     parser.add_argument("--episode_length", default=25, type=int)
     parser.add_argument("--fps", default=30, type=int)

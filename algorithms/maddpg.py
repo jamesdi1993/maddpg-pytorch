@@ -67,7 +67,7 @@ class MADDPG(object):
         for a in self.agents:
             a.reset_noise()
 
-    def step(self, observations, explore=False, k = [0], voted = False):
+    def step(self, observations, explore=False, k = [0], voted = False, max_action=False):
         """
         Take a step forward in environment with all agents
         Inputs:
@@ -76,7 +76,7 @@ class MADDPG(object):
         Outputs:
             actions: List of actions for each agent
         """
-        return [a.step(obs, explore=explore, k = k_i, voted=voted) for k_i, a, obs in zip(k, self.agents,
+        return [a.step(obs, explore=explore, k = k_i, voted=voted, max_action=max_action) for k_i, a, obs in zip(k, self.agents,
                                                                  observations)]
 
     def update(self, sample, agent_i, parallel=False, logger=None, k = [0]):
@@ -101,8 +101,14 @@ class MADDPG(object):
                 all_trgt_acs = [onehot_from_logits(pi[k_i](nobs)) for k_i, pi, nobs in
                                 zip(k, self.target_policies, next_obs)]
             else:
-                all_trgt_acs = [pi[k_i](nobs) for k_i, pi, nobs in zip(k, self.target_policies,
-                                                             next_obs)]
+                all_trgt_acs = []
+                for i, (k_i, pi, nobs) in enumerate(zip(k, self.target_policies,
+                                         next_obs)):
+                    if self.agents[i].stochastic_policy:
+                        a, _ = pi[k_i](nobs)
+                    else:
+                        a = pi[k_i](nobs)
+                    all_trgt_acs.append(a)
             trgt_vf_in = torch.cat((*next_obs, *all_trgt_acs), dim=1)
         else:  # DDPG
             if self.discrete_action:
@@ -112,8 +118,11 @@ class MADDPG(object):
                                                 next_obs[agent_i]))),
                                        dim=1)
             else:
-                trgt_vf_in = torch.cat((next_obs[agent_i],
-                                        curr_agent.target_policy[k[agent_i]](next_obs[agent_i])),
+                if self.agents[agent_i].stochastic_policy:
+                    a, _ = curr_agent.target_policy[k[agent_i]](next_obs[agent_i])
+                else:
+                    a = curr_agent.target_policy[k[agent_i]](next_obs[agent_i])
+                trgt_vf_in = torch.cat((next_obs[agent_i], a),
                                        dim=1)
         target_value = (rews[agent_i].view(-1, 1) + self.gamma *
                         curr_agent.target_critic(trgt_vf_in) *
@@ -142,7 +151,10 @@ class MADDPG(object):
             curr_pol_out = curr_agent.policy[k[agent_i]](obs[agent_i])
             curr_pol_vf_in = gumbel_softmax(curr_pol_out, hard=True)
         else:
-            curr_pol_out = curr_agent.policy[k[agent_i]](obs[agent_i])
+            if self.agents[agent_i].stochastic_policy:
+                curr_pol_out, _ = curr_agent.policy[k[agent_i]](obs[agent_i])
+            else:
+                curr_pol_out = curr_agent.policy[k[agent_i]](obs[agent_i])
             curr_pol_vf_in = curr_pol_out
         if self.alg_types[agent_i] == 'MADDPG':
             all_pol_acs = []
@@ -151,8 +163,12 @@ class MADDPG(object):
                     all_pol_acs.append(curr_pol_vf_in)
                 elif self.discrete_action:
                     all_pol_acs.append(onehot_from_logits(pi[k[i]](ob)))
+                elif self.agents[i].stochastic_policy:
+                    a, _ = pi[k_i](ob)
+                    all_pol_acs.append(a)
                 else:
-                    all_pol_acs.append(pi[k[i]](ob))
+                    a = pi[k_i](ob)
+                    all_pol_acs.append(a)
             vf_in = torch.cat((*obs, *all_pol_acs), dim=1)
         else:  # DDPG
             vf_in = torch.cat((obs[agent_i], curr_pol_vf_in),
@@ -244,8 +260,8 @@ class MADDPG(object):
         agent_init_params = []
         alg_types = [adversary_alg if atype == 'adversary' else agent_alg for
                      atype in env.agent_types]
-        for acsp, obsp, algtype in zip(env.action_space, env.observation_space,
-                                       alg_types):
+        for i, (acsp, obsp, algtype) in enumerate(zip(env.action_space, env.observation_space,
+                                       alg_types)):
             num_in_pol = obsp.shape[0]
             if isinstance(acsp, Box):
                 discrete_action = False
@@ -262,10 +278,13 @@ class MADDPG(object):
                     num_in_critic += get_shape(oacsp)
             else:
                 num_in_critic = obsp.shape[0] + get_shape(acsp)
+
+            # adversary is stochastic;
             agent_init_params.append({'num_in_pol': num_in_pol,
                                       'num_out_pol': num_out_pol,
                                       'num_in_critic': num_in_critic,
-                                      'K': K})
+                                      'K': K,
+                                      'stochastic_policy': env.agent_types[i] == 'adversary'})
         init_dict = {'gamma': gamma, 'tau': tau, 'lr': lr,
                      'hidden_dim': hidden_dim,
                      'alg_types': alg_types,

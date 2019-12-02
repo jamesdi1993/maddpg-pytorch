@@ -13,7 +13,7 @@ def build_common_config(config, model_config):
     :param config: A Plot Generation Config
     :return: A common run config
     """
-    model_name, run_num, agent_ens, adversary_ens, voted = model_config
+    model_name, run_num, agent_ens, adversary_ens, voted, max_action = model_config
     config_base = copy.deepcopy(config)
     config_base.save_gifs = False
     config_base.model_name = model_name
@@ -21,6 +21,7 @@ def build_common_config(config, model_config):
     config_base.agent_ens = agent_ens
     config_base.adversary_ens = adversary_ens
     config_base.voted_execution = voted
+    config_base.max_action = max_action
     return config_base
 
 def build_label(config):
@@ -216,8 +217,8 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("env_id", help="Name of environment")
     # Use space as delimiter to separate out the models
-    parser.add_argument('--models', help="Models to compare with '(model_name, run_id, agent_ens, adversary_ens, voted_evaluation), ...'" + \
-                                         "e.g '('Ensemble-Voted',1, True, False, True),('Ensemble-Random',2, True, False, False)'", type=str)
+    parser.add_argument('--models', help="Models to compare with '(model_name, run_id, agent_ens, adversary_ens, voted_evaluation, max_action), ...'" + \
+                                         "e.g '('Ensemble-Voted',1, True, False, True, False),('Ensemble-Random',2, True, False, False, False)'", type=str)
     parser.add_argument("--n_episodes", default=10, type=int)
     parser.add_argument("--episode_length", default=25, type=int)
     parser.add_argument("--fps", default=30, type=int)

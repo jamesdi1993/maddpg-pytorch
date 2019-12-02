@@ -97,7 +97,7 @@ def run(config):
                                   requires_grad=False)
                          for i in range(maddpg.nagents)]
             # get actions as torch Variables
-            torch_agent_actions = maddpg.step(torch_obs, explore=True, k=k)
+            torch_agent_actions = maddpg.step(torch_obs, explore=True, k=k, max_action=False)
             # convert actions to numpy arrays
             agent_actions = [ac.data.numpy() for ac in torch_agent_actions]
             # rearrange actions to be per environment
@@ -118,6 +118,7 @@ def run(config):
                     for u_i in range(config.n_rollout_threads):
                         sample = replay_buffer[a_i][k[a_i]].sample(config.batch_size,
                                                       to_gpu=USE_CUDA)
+                        # print("Sample is: %s" % (sample,))
                         maddpg.update(sample, a_i, logger=logger, k = k)
                     maddpg.update_all_targets()
                 maddpg.prep_rollouts(device='cpu')

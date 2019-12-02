@@ -1,7 +1,7 @@
 from torch import Tensor
 from torch.autograd import Variable
 from torch.optim import Adam
-from .networks import MLPNetwork
+from .networks import MLPNetwork, StochasticMLPNetwork
 from .misc import hard_update, gumbel_softmax, onehot_from_logits
 from .noise import OUNoise
 import numpy as np
@@ -13,7 +13,7 @@ class DDPGAgent(object):
     critic, exploration noise)
     """
     def __init__(self, num_in_pol, num_out_pol, num_in_critic, hidden_dim=64,
-                 lr=0.01, discrete_action=True, K = 1):
+                 lr=0.01, discrete_action=True, K = 1, stochastic_policy=False):
         """
         Inputs:
             num_in_pol (int): number of dimensions for policy input
@@ -24,15 +24,24 @@ class DDPGAgent(object):
         self.policy = []
         self.target_policy = []
         self.policy_optimizer = []
+        self.stochastic_policy=stochastic_policy
         for k in range(K):
-            self.policy.append(MLPNetwork(num_in_pol, num_out_pol,
-                                 hidden_dim=hidden_dim,
-                                 constrain_out=True,
-                                 discrete_action=discrete_action))
-            self.target_policy.append(MLPNetwork(num_in_pol, num_out_pol,
-                                            hidden_dim=hidden_dim,
-                                            constrain_out=True,
-                                            discrete_action=discrete_action))
+            if stochastic_policy:
+                self.policy.append(StochasticMLPNetwork(num_in_pol, num_out_pol,
+                                              hidden_dim=hidden_dim,
+                                              constrain_out=True, std=0.2))
+                self.target_policy.append(StochasticMLPNetwork(num_in_pol, num_out_pol,
+                                              hidden_dim=hidden_dim,
+                                              constrain_out=True, std=0.2))
+            else:
+                self.policy.append(MLPNetwork(num_in_pol, num_out_pol,
+                                              hidden_dim=hidden_dim,
+                                              constrain_out=True,
+                                              discrete_action=discrete_action))
+                self.target_policy.append(MLPNetwork(num_in_pol, num_out_pol,
+                                                     hidden_dim=hidden_dim,
+                                                     constrain_out=True,
+                                                     discrete_action=discrete_action))
             self.policy_optimizer.append(Adam(self.policy[k].parameters(), lr=lr))
             hard_update(self.target_policy[k], self.policy[k])
 
@@ -60,7 +69,7 @@ class DDPGAgent(object):
         else:
             self.exploration.scale = scale
 
-    def step(self, obs, explore=False, k = 0, voted = False):
+    def step(self, obs, explore=False, k = 0, voted = False, max_action=False):
         """
         Take a step forward in environment for a minibatch of observations
         Inputs:
@@ -69,9 +78,9 @@ class DDPGAgent(object):
         Outputs:
             action (PyTorch Variable): Actions for this agent
         """
-        action = self.policy[k](obs)
-
+        action = None
         if self.discrete_action:
+            action = self.policy[k](obs)
             if voted:
                 ensemble_count = {}
                 ensemble_k = {}
@@ -92,7 +101,17 @@ class DDPGAgent(object):
             else:
                 action = onehot_from_logits(action)
         else:  # continuous action
-            if explore:
+            if self.stochastic_policy and max_action:
+                max_prob = -np.inf
+                for k in range(self.K):
+                    a, log_prob = self.policy[k](obs)
+                    if log_prob > max_prob:
+                        action = a
+                        max_prob = log_prob
+            elif self.stochastic_policy:
+                action, _ = self.policy[k](obs)
+            elif explore:
+                action = self.policy[k](obs)
                 action += Variable(Tensor(self.exploration.noise()),
                                    requires_grad=False)
             action = action.clamp(-1, 1)

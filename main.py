@@ -120,15 +120,16 @@ def run(config):
                         if config.shared_buffer:
                             sample = shared_replay_buffer.sample(config.batch_size,
                                                                        to_gpu=USE_CUDA)
+                            if config.voted_ens:
+                                # print("Shared buffer")
+                                maddpg.update_shared_voted(sample, a_i, logger=logger, k=k, voted=True)
                         else:
-                            sample = replay_buffer[a_i][k[a_i]].sample(config.batch_size,
+                            for j in range(config.n_ensemble):
+                                k_j = np.copy(k)
+                                k_j[a_i] = j
+                                sample = replay_buffer[a_i][k[a_i]].sample(config.batch_size,
                                                       to_gpu=USE_CUDA)
-                        #print("Shared buffer", config.shared_buffer)
-                        if config.shared_buffer and config.voted_ens:
-                            #print("Shared buffer")
-                            maddpg.update_shared_voted(sample, a_i, logger=logger, k = k, voted=True)
-                        else:
-                            maddpg.update(sample, a_i, logger=logger, k = k)
+                                maddpg.update(sample, a_i, logger=logger, k = k_j)
                     maddpg.update_all_targets()
                 maddpg.prep_rollouts(device='cpu')
         #ep_rews = replay_buffer[k].get_average_rewards(

@@ -147,6 +147,7 @@ def plot_agents_return(agents_return, xs, config):
     :param config: The config
     :return: N/A
     """
+    plt.figure(dpi=600)
     plots = []
     for i in range(agents_return.shape[1]):
         line = plt.plot(xs, agents_return[:, i], label='Agent %d' % i)
@@ -196,9 +197,10 @@ def plot_returns(returns, xs, config, labels):
     :param config: configuration for evaluation
     :return: N/A
     """
+    plt.figure(dpi=600)
     plots = []
     for i in range(returns.shape[0]):
-        line = plt.plot(xs, returns[i, :], label=labels[i])
+        line = plt.plot(xs, returns[i, :], label=labels[i], linewidth=2)
         plots.append(line)
     plt.legend()
 

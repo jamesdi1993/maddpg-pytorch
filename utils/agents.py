@@ -29,10 +29,10 @@ class DDPGAgent(object):
             if stochastic_policy:
                 self.policy.append(StochasticMLPNetwork(num_in_pol, num_out_pol,
                                               hidden_dim=hidden_dim,
-                                              constrain_out=True, std=0.2))
+                                              constrain_out=True, std=0.01))
                 self.target_policy.append(StochasticMLPNetwork(num_in_pol, num_out_pol,
                                               hidden_dim=hidden_dim,
-                                              constrain_out=True, std=0.2))
+                                              constrain_out=True, std=0.01))
             else:
                 self.policy.append(MLPNetwork(num_in_pol, num_out_pol,
                                               hidden_dim=hidden_dim,
@@ -110,8 +110,10 @@ class DDPGAgent(object):
                         max_prob = log_prob
             elif self.stochastic_policy:
                 action, _ = self.policy[k](obs)
-            elif explore:
+            else:
                 action = self.policy[k](obs)
+
+            if explore:
                 action += Variable(Tensor(self.exploration.noise()),
                                    requires_grad=False)
             action = action.clamp(-1, 1)

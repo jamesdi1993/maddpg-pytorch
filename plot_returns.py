@@ -212,7 +212,7 @@ def plot_returns(returns, xs, config, labels):
     plt.savefig(fig_dir + '/%s.png' % file_name)
     plt.show()
 
-# Example usage: python plot_returns.py simple_tag --models "[('maddpg_vs_ddpg',1, False, False, False),('maddpg_vs_maddpg',1, True, False, True)]" --n_episodes 10
+# Example usage: python plot_returns.py simple_tag --models "[('maddpg_vs_ddpg',1, False, False, False, False),('maddpg_vs_maddpg',1, True, False, True, True)]" --n_episodes 10
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("env_id", help="Name of environment")
